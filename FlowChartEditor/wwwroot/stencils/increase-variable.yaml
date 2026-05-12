@@ -1,0 +1,35 @@
+name: IncreaseVariable
+displayName: Increase Variable
+description: Increases a declared variable by 1
+
+baseType: Process
+
+stencilGroup: MY COMPANY
+stencilTab: Variables
+
+color:
+  fill: "#e0f2fe"
+  stroke: "#0369a1"
+  text: "#0c4a6e"
+
+ports:
+  remove:
+    - out-right
+
+properties:
+  hide:
+    - duration
+    - assignee
+    - code
+
+  add:
+    - key: variableName
+      label: Variable Name
+      type: Text
+      required: true
+      source: startTerminal.variables
+
+    - key: incrementBy
+      label: Increment By
+      type: Numeric
+      defaultValue: "1"

@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 18
+VisualStudioVersion = 18.0.11205.157 d18.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FlowChartEditor", "FlowChartEditor\\FlowChartEditor.csproj", "{AEC2CE48-CFAE-830A-E889-62AA9928BEE2}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{AEC2CE48-CFAE-830A-E889-62AA9928BEE2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AEC2CE48-CFAE-830A-E889-62AA9928BEE2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AEC2CE48-CFAE-830A-E889-62AA9928BEE2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AEC2CE48-CFAE-830A-E889-62AA9928BEE2}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {37AD202C-C579-4CE3-B69C-CC9CCBA0F258}
+	EndGlobalSection
+EndGlobal

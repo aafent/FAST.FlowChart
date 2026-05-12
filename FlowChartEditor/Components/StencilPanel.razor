@@ -1,0 +1,165 @@
+@using FlowChartEditor.Models
+@using FlowChartEditor.Models.Artifacts
+@using FlowChartEditor.Models.Ufa
+@using FlowChartEditor.Services
+@inject UfaLoader UfaLoader
+
+<div class="fc-stencil">
+
+    @* ── Stencil groups — collapsible, data-driven ── *@
+    @foreach (var group in _groups)
+    {
+        var g           = group;
+        var isExpanded  = _expandedGroup == g.Name;
+        var activeTab   = _activeTabs.TryGetValue(g.Name, out var t) ? t : g.Tabs.FirstOrDefault()?.Name ?? string.Empty;
+
+        <div class="fc-stencil-group">
+
+            @* Group title — click to expand/collapse *@
+            <div class="fc-stencil-group-header @(isExpanded ? "expanded" : "")"
+                 @onclick="() => ToggleGroup(g.Name)">
+                <span class="fc-stencil-group-title">@g.Name</span>
+                <span class="fc-stencil-group-arrow">@(isExpanded ? "▼" : "▶")</span>
+            </div>
+
+            @* Group content — only shown when expanded *@
+            @if (isExpanded)
+            {
+                @* Tab buttons *@
+                <div class="fc-stencil-tabs">
+                    @foreach (var tab in g.Tabs)
+                    {
+                        var tabName = tab.Name;
+                        <button class="fc-stencil-tab @(activeTab == tabName ? "active" : "")"
+                                @onclick="() => SetActiveTab(g.Name, tabName)">
+                            @tabName
+                        </button>
+                    }
+                </div>
+
+                @* Items for the active tab *@
+                <div class="fc-stencil-items">
+                    @foreach (var info in ArtifactFactory.GetStencilItems(g.Name, activeTab))
+                    {
+                        var i        = info;
+                        var isActive = ActiveType == i.Type;
+                        <div class="fc-stencil-item @(isActive ? "fc-stencil-item-active" : "")"
+                             title="@i.DisplayName"
+                             @onclick="() => OnArtifactSelected.InvokeAsync(i.Type)">
+                            <svg width="52" height="36" viewBox="0 0 52 36">
+                                @((MarkupString)GetStencilSvg(i.Type))
+                            </svg>
+                            <span class="fc-stencil-label">@i.DisplayName</span>
+                            @if (isActive){ <span class="fc-stencil-active-dot">●</span> }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+
+    @* ── UFA groups ── *@
+    @foreach (var ufaGroup in UfaLoader.GetUfaStencilGroups())
+    {
+        var g          = ufaGroup;
+        var isExpanded = _expandedGroup == g.Name;
+        var activeTab  = _activeUfaTabs.TryGetValue(g.Name, out var t) ? t : g.Tabs.FirstOrDefault()?.Name ?? string.Empty;
+
+        <div class="fc-stencil-group">
+            <div class="fc-stencil-group-header @(isExpanded ? "expanded" : "")"
+                 @onclick="() => ToggleGroup(g.Name)">
+                <span class="fc-stencil-group-title">@g.Name</span>
+                <span class="fc-stencil-group-arrow">@(isExpanded ? "▼" : "▶")</span>
+            </div>
+
+            @if (isExpanded)
+            {
+                <div class="fc-stencil-tabs">
+                    @foreach (var tab in g.Tabs)
+                    {
+                        var tabName = tab.Name;
+                        <button class="fc-stencil-tab @(activeTab == tabName ? "active" : "")"
+                                @onclick="() => SetUfaActiveTab(g.Name, tabName)">
+                            @tabName
+                        </button>
+                    }
+                </div>
+
+                <div class="fc-stencil-items">
+                    @foreach (var item in g.Tabs.FirstOrDefault(t => t.Name == activeTab)?.Items ?? new())
+                    {
+                        var i        = item;
+                        var isActive = ActiveUfaName == i.UfaName;
+                        <div class="fc-stencil-item @(isActive ? "fc-stencil-item-active" : "")"
+                             title="@i.DisplayName"
+                             @onclick="() => OnUfaSelected.InvokeAsync(i.UfaName)">
+                            <svg width="52" height="36" viewBox="0 0 52 36">
+                                @((MarkupString)GetUfaStencilSvg(i.Definition))
+                            </svg>
+                            <span class="fc-stencil-label">@i.DisplayName</span>
+                            @if (isActive){ <span class="fc-stencil-active-dot">●</span> }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+
+    @* ── Hint at bottom ── *@
+    <div class="fc-stencil-hint">
+        @if (ActiveType.HasValue)
+        {
+            <span class="fc-hint-active">Click canvas to place · Esc to cancel</span>
+        }
+        else
+        {
+            <span class="fc-hint-idle">Click a shape to place it</span>
+        }
+    </div>
+
+</div>
+
+@code {
+    [Parameter] public EventCallback<ArtifactType> OnArtifactSelected { get; set; }
+    [Parameter] public EventCallback<string>       OnUfaSelected      { get; set; }
+    [Parameter] public ArtifactType?               ActiveType         { get; set; }
+    [Parameter] public string?                     ActiveUfaName      { get; set; }
+
+    private List<StencilGroupInfo>     _groups        = new();
+    private string                     _expandedGroup = string.Empty;
+    private Dictionary<string, string> _activeTabs    = new();
+    private Dictionary<string, string> _activeUfaTabs = new();
+
+    protected override void OnInitialized()
+    {
+        _groups = ArtifactFactory.GetStencilGroups();
+
+        if (_groups.Count > 0)
+        {
+            _expandedGroup = _groups[0].Name;
+            foreach (var g in _groups)
+                _activeTabs[g.Name] = g.Tabs.FirstOrDefault()?.Name ?? string.Empty;
+        }
+
+        foreach (var g in UfaLoader.GetUfaStencilGroups())
+            _activeUfaTabs[g.Name] = g.Tabs.FirstOrDefault()?.Name ?? string.Empty;
+    }
+
+    private void ToggleGroup(string name) =>
+        _expandedGroup = _expandedGroup == name ? string.Empty : name;
+
+    private void SetActiveTab(string group, string tab)    => _activeTabs[group]    = tab;
+    private void SetUfaActiveTab(string group, string tab) => _activeUfaTabs[group] = tab;
+
+    private static string GetStencilSvg(ArtifactType type)
+    {
+        var artifact = ArtifactFactory.Create(type, 0, 0);
+        return artifact.RenderStencilShape();
+    }
+
+    private string GetUfaStencilSvg(UfaDefinition def)
+    {
+        var instance = UfaLoader.CreateInstance(def.Name, 0, 0);
+        return instance?.RenderStencilShape() ?? string.Empty;
+    }
+}

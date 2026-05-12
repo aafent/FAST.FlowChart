@@ -1,0 +1,105 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   FlowChart Editor App – Global Styles
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Reset ────────────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #f9fafb;
+}
+
+#app {
+  height: 100%;
+  width: 100%;
+}
+
+.fc-app-shell {
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Loading splash ───────────────────────────────────────────────────────── */
+#fc-loading {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f9fafb;
+  z-index: 9999;
+}
+
+.fc-splash {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.fc-splash-icon {
+  animation: fcPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes fcPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.6; transform: scale(0.95); }
+}
+
+.fc-splash-text {
+  margin: 0;
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+/* ── Blazor error UI ──────────────────────────────────────────────────────── */
+#blazor-error-ui {
+  background: #fef2f2;
+  border-top: 1px solid #fca5a5;
+  bottom: 0;
+  color: #991b1b;
+  display: none;
+  font-size: 13px;
+  left: 0;
+  padding: 10px 16px;
+  position: fixed;
+  width: 100%;
+  z-index: 10000;
+}
+
+#blazor-error-ui .reload {
+  color: #6366f1;
+  cursor: pointer;
+  margin-left: 8px;
+  text-decoration: underline;
+}
+
+#blazor-error-ui .dismiss {
+  cursor: pointer;
+  float: right;
+  font-weight: 700;
+  opacity: 0.6;
+}
+
+#blazor-error-ui .dismiss:hover { opacity: 1; }
+
+/* ── Drag-over highlight ──────────────────────────────────────────────────── */
+.fc-canvas-wrapper.drag-over {
+  outline: 2px dashed #6366f1;
+  outline-offset: -2px;
+}

@@ -1,0 +1,7 @@
+{
+  "version": "1.0",
+  "author": "",
+  "artifacts": [
+    { "file": "increase-variable.yaml", "enabled": true }
+  ]
+}

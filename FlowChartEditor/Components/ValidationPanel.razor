@@ -1,0 +1,57 @@
+@using FlowChartEditor.Models
+
+@if (IsVisible && Result != null)
+{
+    <div class="fc-validation-panel">
+        <div class="fc-validation-header">
+            <span class="fc-validation-title">
+                @if (Result.IsValid && Result.Warnings.Count == 0)
+                {
+                    <span class="fc-val-ok">✓ Diagram is valid</span>
+                }
+                else if (!Result.IsValid)
+                {
+                    <span class="fc-val-error">✗ @Result.Errors.Count error(s)</span>
+                    @if (Result.Warnings.Count > 0)
+                    {
+                        <span class="fc-val-warn">  @Result.Warnings.Count warning(s)</span>
+                    }
+                }
+                else
+                {
+                    <span class="fc-val-warn">⚠ @Result.Warnings.Count warning(s)</span>
+                }
+            </span>
+            <button class="fc-val-close" @onclick="() => OnClose.InvokeAsync()">✕</button>
+        </div>
+
+        @if (Result.Errors.Count > 0 || Result.Warnings.Count > 0)
+        {
+            <div class="fc-validation-list">
+                @foreach (var msg in Result.Errors)
+                {
+                    <div class="fc-val-item fc-val-item-error"
+                         @onclick="() => OnArtifactFocus.InvokeAsync(msg.ArtifactId)">
+                        <span class="fc-val-icon">✗</span>
+                        <span class="fc-val-text">@msg.Message</span>
+                    </div>
+                }
+                @foreach (var msg in Result.Warnings)
+                {
+                    <div class="fc-val-item fc-val-item-warn"
+                         @onclick="() => OnArtifactFocus.InvokeAsync(msg.ArtifactId)">
+                        <span class="fc-val-icon">⚠</span>
+                        <span class="fc-val-text">@msg.Message</span>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public ValidationResult? Result { get; set; }
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<Guid?> OnArtifactFocus { get; set; }
+}

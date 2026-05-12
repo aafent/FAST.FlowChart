@@ -1,0 +1,389 @@
+@using FlowChartEditor.Models
+@using FlowChartEditor.Models.Ufa
+@using FlowChartEditor.Services
+@inject FlowChartService ChartService
+@inject SyntaxValidator  Validator
+@inject UfaLoader        UfaLoader
+@implements IDisposable
+
+<div class="fc-editor-root">
+
+    @* ── Toolbar ──────────────────────────────────────────────────────────── *@
+    <div class="fc-toolbar">
+        <div class="fc-toolbar-group">
+
+            @* ── New button — standalone ── *@
+            <button class="fc-tool-btn" title="New" @onclick="HandleNew">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </button>
+
+            @* ── File dropdown ── *@
+            <div class="fc-file-menu-wrap">
+                <button class="fc-tool-btn fc-file-btn @(_fileMenuOpen ? "active" : "")"
+                        title="File menu"
+                        @onclick="ToggleFileMenu">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                    <span class="fc-file-btn-label">File</span>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+
+                @if (_fileMenuOpen)
+                {
+                    <div class="fc-file-menu"
+                         @onclick:stopPropagation="true"
+                         @onmousedown:stopPropagation="true">
+                        <button class="fc-file-menu-item" @onclick="HandleFileMenuLoad">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                            Load
+                        </button>
+                        <div class="fc-file-menu-divider"></div>
+                        <button class="fc-file-menu-item" @onclick="HandleFileMenuSave">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                            Save
+                        </button>
+                        <button class="fc-file-menu-item" @onclick="HandleFileMenuSaveAs">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/><line x1="9" y1="17" x2="9" y2="21"/></svg>
+                            Save As…
+                        </button>
+                        <div class="fc-file-menu-divider"></div>
+                        @* Export submenu *@
+                        <div class="fc-file-menu-submenu-wrap"
+                             @onmouseenter="() => _exportMenuOpen = true"
+                             @onmouseleave="() => _exportMenuOpen = false">
+                            <button class="fc-file-menu-item fc-file-menu-item-sub">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                Export
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-left:auto"><polyline points="9 6 15 12 9 18"/></svg>
+                            </button>
+                            @if (_exportMenuOpen)
+                            {
+                                <div class="fc-file-submenu">
+                                    <button class="fc-file-menu-item" @onclick="HandleExportSvg">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+                                        Export as SVG
+                                    </button>
+                                    <button class="fc-file-menu-item" @onclick="HandleExportPng">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                                        Export as PNG (2x)
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+        <div class="fc-toolbar-divider"></div>
+        <div class="fc-toolbar-group">
+            <button class="fc-tool-btn" title="Undo (Ctrl+Z)" disabled="@(!ChartService.History.CanUndo)" @onclick="HandleUndo">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+            </button>
+            <button class="fc-tool-btn" title="Redo (Ctrl+Y)" disabled="@(!ChartService.History.CanRedo)" @onclick="HandleRedo">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 0 4-4h12"/></svg>
+            </button>
+        </div>
+        <div class="fc-toolbar-divider"></div>
+        <div class="fc-toolbar-group">
+            <button class="fc-tool-btn" title="Delete (Del)" @onclick="HandleDelete">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+            </button>
+            <button class="fc-tool-btn" title="Select All (Ctrl+A)" @onclick="HandleSelectAll">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            </button>
+        </div>
+        <div class="fc-toolbar-divider"></div>
+        <div class="fc-toolbar-group">
+            <button class="fc-tool-btn" title="Zoom Out" @onclick="HandleZoomOut">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+            </button>
+            <span class="fc-zoom-label">@((int)(_zoom * 100))%</span>
+            <button class="fc-tool-btn" title="Zoom In" @onclick="HandleZoomIn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+            </button>
+            <button class="fc-tool-btn" title="Reset Zoom" @onclick="HandleZoomFit">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+            </button>
+        </div>
+        <div class="fc-toolbar-divider"></div>
+        <div class="fc-toolbar-group">
+            <button class="fc-tool-btn @(_snapToGrid ? "active" : "")" title="Snap to Grid" @onclick="HandleSnapToggle">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            </button>
+            <button class="fc-tool-btn" title="Validate" @onclick="HandleValidate">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </button>
+        </div>
+        <div class="fc-toolbar-divider"></div>
+        <div class="fc-toolbar-group">
+            <button class="fc-tool-btn" title="Align Vertical Centers — same horizontal axis (select 2+ artifacts)"
+                    @onclick="HandleAlignVertical">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="2" y="7" width="6" height="10" rx="1"/>
+                    <rect x="9" y="9" width="6" height="6" rx="1"/>
+                    <rect x="16" y="5" width="6" height="14" rx="1"/>
+                    <line x1="1" y1="12" x2="23" y2="12" stroke-dasharray="2 1"/>
+                </svg>
+            </button>
+            <button class="fc-tool-btn" title="Align Horizontal Centers — same vertical axis (select 2+ artifacts)"
+                    @onclick="HandleAlignHorizontal">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="7" y="2" width="10" height="6" rx="1"/>
+                    <rect x="9" y="9" width="6" height="6" rx="1"/>
+                    <rect x="5" y="16" width="14" height="6" rx="1"/>
+                    <line x1="12" y1="1" x2="12" y2="23" stroke-dasharray="2 1"/>
+                </svg>
+            </button>
+        </div>
+        <div class="fc-toolbar-spacer"></div>
+        @if (_activePlacementType.HasValue)
+        {
+            <div class="fc-tool-active-badge">
+                Placing: <strong>@_activePlacementType.Value</strong>
+                <button class="fc-tool-cancel" @onclick="CancelPlacement">✕</button>
+            </div>
+            <div class="fc-toolbar-divider"></div>
+        }
+        <div class="fc-toolbar-title">
+            @if (ChartService.HasUnsavedChanges){ <span class="fc-unsaved">●</span> }
+            @if (_isEditingTitle)
+            {
+                <input class="fc-title-input"
+                       id="fc-title-input"
+                       value="@_editingTitleValue"
+                       @oninput="(e) => _editingTitleValue = e.Value?.ToString() ?? string.Empty"
+                       @onblur="CommitTitleEdit"
+                       @onkeydown="HandleTitleKeyDown"
+                       @onkeydown:stopPropagation="true"
+                       @onclick:stopPropagation="true"/>
+            }
+            else
+            {
+                <span class="fc-title-text"
+                      title="Double-click to rename"
+                      @ondblclick="StartTitleEdit">
+                    @ChartService.Chart.Title
+                </span>
+            }
+        </div>
+    </div>
+
+    @* ── Body ─────────────────────────────────────────────────────────────── *@
+    <div class="fc-main-layout">
+
+        @* Stencil *@
+        <StencilPanel OnArtifactSelected="HandleStencilSelect"
+                      OnUfaSelected="HandleUfaStencilSelect"
+                      ActiveType="_activePlacementType"
+                      ActiveUfaName="_activeUfaName"/>
+
+        @* Canvas scroll area *@
+        <div class="fc-canvas-wrapper @(_activePlacementType.HasValue ? "fc-placing" : "")"
+             id="fc-canvas-wrapper"
+             @onwheel="HandleWheel"
+             @onwheel:preventDefault="true"
+             @onkeydown="HandleKeyDown"
+             tabindex="0">
+
+            @* SVG — sits INSIDE the scroll div, not absolutely positioned *@
+            <svg id="fc-svg-canvas"
+                 width="@F(ChartService.Chart.CanvasWidth  * _zoom)"
+                 height="@F(ChartService.Chart.CanvasHeight * _zoom)"
+                 style="display:block; cursor:@_canvasCursor;"
+                 @onmousedown="HandleCanvasMouseDown"
+                 @onmousemove="HandleMouseMove"
+                 @onmouseup="HandleMouseUp"
+                 @onmouseleave="HandleMouseLeave">
+
+                <g transform="scale(@F(_zoom))">
+
+                    @* Grid *@
+                    <defs>
+                        <pattern id="sg" width="@ChartService.Chart.GridSize" height="@ChartService.Chart.GridSize" patternUnits="userSpaceOnUse">
+                            <path d="M @ChartService.Chart.GridSize 0 L 0 0 0 @ChartService.Chart.GridSize" fill="none" stroke="#e2e8f0" stroke-width="0.5"/>
+                        </pattern>
+                        <pattern id="lg" width="@(ChartService.Chart.GridSize*5)" height="@(ChartService.Chart.GridSize*5)" patternUnits="userSpaceOnUse">
+                            <rect width="@(ChartService.Chart.GridSize*5)" height="@(ChartService.Chart.GridSize*5)" fill="url(#sg)"/>
+                            <path d="M @(ChartService.Chart.GridSize*5) 0 L 0 0 0 @(ChartService.Chart.GridSize*5)" fill="none" stroke="#cbd5e1" stroke-width="1"/>
+                        </pattern>
+                    </defs>
+                    <rect width="@ChartService.Chart.CanvasWidth" height="@ChartService.Chart.CanvasHeight" fill="url(#lg)"/>
+
+                    @* Connections *@
+                    @foreach (var conn in ChartService.Chart.Connections)
+                    {
+                        var srcArtifact = conn.SourceArtifactId.HasValue ? ChartService.Chart.FindArtifact(conn.SourceArtifactId.Value) : null;
+                        var tgtArtifact = conn.TargetArtifactId.HasValue ? ChartService.Chart.FindArtifact(conn.TargetArtifactId.Value) : null;
+                        <ConnectionLine Connection="conn"
+                                        StartPoint="GetConnectionStartPoint(conn)"
+                                        EndPoint="GetConnectionEndPoint(conn)"
+                                        SourceArtifact="srcArtifact"
+                                        TargetArtifact="tgtArtifact"
+                                        OnClick="HandleConnectionClick"
+                                        OnDblClick="HandleConnectionDblClick"
+                                        OnEndpointDragStart="HandleEndpointDragStart"/>
+                    }
+
+                    @* In-progress connection *@
+                    @if (_isDrawingConnection && _connectionStartPoint.HasValue && _connectionDragPoint.HasValue)
+                    {
+                        <line x1="@F(_connectionStartPoint.Value.X)" y1="@F(_connectionStartPoint.Value.Y)"
+                              x2="@F(_connectionDragPoint.Value.X)"  y2="@F(_connectionDragPoint.Value.Y)"
+                              stroke="#6366f1" stroke-width="1.5" stroke-dasharray="5 4" pointer-events="none"/>
+                    }
+
+                    @* Endpoint drag preview *@
+                    @if (_isDraggingEndpoint && _draggingConnection != null)
+                    {
+                        var fixedPt = _draggingIsSource
+                            ? GetConnectionEndPoint(_draggingConnection)
+                            : GetConnectionStartPoint(_draggingConnection);
+                        @if (fixedPt.HasValue)
+                        {
+                            <line x1="@F(fixedPt.Value.X)" y1="@F(fixedPt.Value.Y)"
+                                  x2="@F(_endpointDragPoint.X)" y2="@F(_endpointDragPoint.Y)"
+                                  stroke="#6366f1" stroke-width="1.5" stroke-dasharray="5 4" pointer-events="none"/>
+                            <circle cx="@F(_endpointDragPoint.X)" cy="@F(_endpointDragPoint.Y)"
+                                    r="5" fill="#6366f1" stroke="white" stroke-width="1.5" pointer-events="none"/>
+                        }
+                    }
+
+                    @* Ghost preview *@
+                    @if (_activePlacementType.HasValue && _ghostPoint.HasValue)
+                    {
+                        var gd   = ArtifactFactory.Create(_activePlacementType.Value, 0, 0);
+                        var info = ArtifactFactory.GetStencilInfo(_activePlacementType.Value);
+                        var gx   = _ghostPoint.Value.X - gd.Width  / 2;
+                        var gy   = _ghostPoint.Value.Y - gd.Height / 2;
+                        <rect x="@F(gx)" y="@F(gy)" width="@F(gd.Width)" height="@F(gd.Height)"
+                              rx="5" fill="@info.FillColor" stroke="@info.StrokeColor"
+                              stroke-width="1.5" stroke-dasharray="6 3" opacity="0.5" pointer-events="none"/>
+                    }
+
+                    @* Artifacts *@
+                    @foreach (var artifact in ChartService.Chart.Artifacts)
+                    {
+                        <g style="cursor:pointer;"
+                           @onmousedown="(e) => HandleArtifactMouseDown(e, artifact)"
+                           @onmousedown:stopPropagation="true"
+                           @onmouseup="(e) => HandleArtifactMouseUp(e, artifact)"
+                           @ondblclick="(e) => HandleArtifactDblClick(e, artifact)"
+                           @ondblclick:stopPropagation="true"
+                           @onmouseenter="() => { _hoveredArtifactId = artifact.Id; }"
+                           @onmouseleave="() => { _hoveredArtifactId = null; }">
+
+                            <ArtifactShape Artifact="artifact"/>
+
+                            @if (artifact.IsEditingLabel)
+                            {
+                                <foreignObject x="@F(artifact.X)" y="@F(artifact.Y)"
+                                               width="@F(artifact.Width)" height="@F(artifact.Height)">
+                                    <input xmlns="http://www.w3.org/1999/xhtml"
+                                           class="fc-inline-input"
+                                           style="width:100%;height:100%;text-align:center;"
+                                           value="@_editingLabelValue"
+                                           @oninput="(e) => _editingLabelValue = e.Value?.ToString() ?? string.Empty"
+                                           @onblur="CommitLabelEdit"
+                                           @onkeydown="HandleLabelKeyDown"
+                                           @onkeydown:stopPropagation="true"
+                                           id="fc-label-input"/>
+                                </foreignObject>
+                            }
+
+                            @if (artifact.IsSelected || _hoveredArtifactId == artifact.Id || _isDrawingConnection || _isDraggingEndpoint)
+                            {
+                                @* For OnPageConnector show only one set of ports (output) since they are bidirectional *@
+                                var portsToShow = artifact.Type == ArtifactType.OnPageConnector
+                                    ? artifact.Ports.Where(p => p.Direction == PortDirection.Output).ToList()
+                                    : artifact.Ports;
+
+                                @foreach (var port in portsToShow)
+                                {
+                                    var portColor = artifact.Type == ArtifactType.OnPageConnector
+                                        ? "#8b5cf6"  // violet — indicates bidirectional
+                                        : (port.Direction == PortDirection.Output ? "#6366f1" : "#10b981");
+                                    <circle cx="@F(port.Position.X)" cy="@F(port.Position.Y)" r="5"
+                                            fill="@portColor"
+                                            stroke="white" stroke-width="1.5" style="cursor:crosshair;"
+                                            @onmousedown="(e) => HandlePortMouseDown(e, artifact, port)"
+                                            @onmousedown:stopPropagation="true"
+                                            @onmouseup="(e) => HandlePortMouseUp(e, artifact, port)"
+                                            @onmouseup:stopPropagation="true"/>
+                                }
+                            }
+                        </g>
+                    }
+
+                    @* Rubber-band *@
+                    @if (_isRubberBanding && _rubberBandRect.HasValue)
+                    {
+                        var rb = _rubberBandRect.Value;
+                        <rect x="@F(rb.X)" y="@F(rb.Y)" width="@F(rb.Width)" height="@F(rb.Height)"
+                              fill="rgba(99,102,241,0.07)" stroke="#6366f1" stroke-width="1"
+                              stroke-dasharray="4 3" pointer-events="none"/>
+                    }
+
+                </g>
+            </svg>
+        </div>
+
+        @* Validation panel *@
+        @if (_showRightPanel)
+        {
+            <div class="fc-right-panel">
+                <ValidationPanel Result="_validationResult" IsVisible="_showValidation"
+                                 OnClose="() => _showValidation = false"
+                                 OnArtifactFocus="FocusArtifact"/>
+            </div>
+        }
+    </div>
+
+    @* File input (hidden) *@
+    <InputFile id="fc-file-input" OnChange="HandleFileSelected" accept=".json" style="display:none;"/>
+
+    @* Save As modal *@
+    @if (_showSaveAs)
+    {
+        <div class="fc-modal-overlay">
+            <div class="fc-modal fc-modal-sm">
+                <div class="fc-modal-header">
+                    <h3>Save As</h3>
+                    <button class="fc-modal-close" @onclick="() => _showSaveAs = false">✕</button>
+                </div>
+                <div class="fc-modal-body">
+                    <div class="fc-prop-group">
+                        <label class="fc-prop-label">File Name</label>
+                        <input class="fc-prop-input" type="text"
+                               @bind="_saveAsFileName"
+                               placeholder="Enter file name…"/>
+                    </div>
+                </div>
+                <div class="fc-modal-footer">
+                    <button class="fc-btn fc-btn-ghost"   @onclick="() => _showSaveAs = false">Cancel</button>
+                    <button class="fc-btn fc-btn-primary" @onclick="CommitSaveAs">Save</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <PropertiesModal Artifact="_propertiesArtifact" IsVisible="_showProperties"
+                     Chart="ChartService.Chart"
+                     OnSave="HandlePropertiesSave"
+                     OnSaveConnection="HandleConnectionPropertiesSave"
+                     OnCancel="() => { _showProperties = false; _propertiesArtifact = null; }"/>
+
+    @* Confirm New *@
+    @if (_showConfirmNew)
+    {
+        <div class="fc-modal-overlay">
+            <div class="fc-modal fc-modal-sm">
+                <div class="fc-modal-header"><h3>New Diagram</h3></div>
+                <div class="fc-modal-body"><p>You have unsaved changes. Discard and create new?</p></div>
+                <div class="fc-modal-footer">
+                    <button class="fc-btn fc-btn-ghost"  @onclick="() => _showConfirmNew = false">Cancel</button>
+                    <button class="fc-btn fc-btn-danger" @onclick="ConfirmNew">Discard & New</button>
+                </div>
+            </div>
+        </div>
+    }
+
+</div>

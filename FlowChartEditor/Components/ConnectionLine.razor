@@ -1,0 +1,318 @@
+@using FlowChartEditor.Models
+@using FlowChartEditor.Models.Artifacts
+@using System.Globalization
+
+@if (Connection != null && StartPoint.HasValue && EndPoint.HasValue)
+{
+    var sp         = StartPoint.Value;
+    var ep         = EndPoint.Value;
+    var isSelected = Connection.IsSelected;
+    var isLoop     = Connection.IsLoopLine;
+
+    var stroke      = isLoop ? "#f59e0b" : (isSelected ? "#6366f1" : Connection.LineColor);
+    var strokeWidth = isSelected ? "1.80" : "1.1";
+    var markerId    = $"mk-end-{Connection.Id}";
+    var markerSId   = $"mk-start-{Connection.Id}";
+
+    var pathD    = isLoop
+        ? BuildLoopPath(sp, ep, Connection.LoopSide, SourceArtifact, TargetArtifact)
+        : BuildPath(sp, ep, Connection.LineType, SourceArtifact, Connection.SourcePortId);
+
+    var labelPos = isLoop
+        ? GetLoopLabelPoint(sp, ep, Connection.LoopSide, SourceArtifact, TargetArtifact)
+        : Midpoint(sp, ep);
+
+    var loopText = string.IsNullOrWhiteSpace(Connection.LoopLabel)
+        ? "↺"
+        : $"↺ {Connection.LoopLabel}";
+
+    <defs>
+        @if (isLoop)
+        {
+            <marker id="@markerId" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto">
+                <polygon points="0 0, 10 4, 0 8" fill="#f59e0b"/>
+            </marker>
+            <marker id="@markerSId" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto">
+                <circle cx="5" cy="5" r="4" fill="#f59e0b"/>
+            </marker>
+        }
+        else
+        {
+            @if (Connection.EndTerminator != ArrowTerminator.None)
+            {
+                <marker id="@markerId" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                    @RenderMarkerShape(Connection.EndTerminator, stroke)
+                </marker>
+            }
+            @if (Connection.StartTerminator != ArrowTerminator.None)
+            {
+                <marker id="@markerSId" markerWidth="10" markerHeight="7" refX="1" refY="3.5" orient="auto-start-reverse">
+                    @RenderMarkerShape(Connection.StartTerminator, stroke)
+                </marker>
+            }
+        }
+    </defs>
+
+    @* Visible line *@
+    <path d="@pathD"
+          fill="none"
+          stroke="@stroke"
+          stroke-width="@strokeWidth"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          marker-end="url(#@markerId)"
+          marker-start="@(isLoop || Connection.StartTerminator != ArrowTerminator.None ? $"url(#{markerSId})" : "")"
+          class="fc-connection @(isLoop ? "fc-loop-line" : "")"
+          pointer-events="none"/>
+
+    @* When selected, restore click on the line itself (hit area is disabled for handles to work) *@
+    @if (isSelected)
+    {
+        <path d="@pathD"
+              fill="none"
+              stroke="white"
+              stroke-width="12"
+              opacity="0.001"
+              style="cursor:pointer;"
+              pointer-events="stroke"
+              @onclick="HandleClick"
+              @onclick:stopPropagation="true"/>
+    }
+
+    @* Wide hit area — only active when NOT selected *@
+    @* Only active when NOT dragging endpoints (handles get priority) *@
+    <path d="@pathD"
+          fill="none"
+          stroke="white"
+          stroke-width="20"
+          opacity="0.001"
+          style="cursor:pointer;"
+          pointer-events="@(isSelected ? "none" : "stroke")"
+          data-conn-id="@Connection!.Id"
+          @onmousedown:stopPropagation="true"
+          @onclick="HandleClick"
+          @onclick:stopPropagation="true"
+          @onmouseenter="() => { _isHovered = true; }"
+          @onmouseleave="() => { _isHovered = false; }"/>
+
+    @* Hover highlight *@
+    @if (_isHovered && !isSelected)
+    {
+        <path d="@pathD"
+              fill="none"
+              stroke="@(isLoop ? "#fbbf24" : "#6366f1")"
+              stroke-width="4"
+              stroke-linecap="round"
+              opacity="0.3"
+              pointer-events="none"/>
+    }
+
+    @* Endpoint drag handles — shown only when selected, rendered last so they're on top *@
+    @if (isSelected)
+    {
+        @* Invisible wider click area for source handle *@
+        <circle cx="@F(sp.X)" cy="@F(sp.Y)" r="10"
+                fill="rgba(0,0,0,0)"
+                style="cursor:grab;"
+                pointer-events="all"
+                @onmousedown="(e) => OnEndpointDragStart.InvokeAsync((e, Connection!, true))"
+                @onmousedown:stopPropagation="true"/>
+        @* Visible source handle square *@
+        <rect x="@F(sp.X - 6)" y="@F(sp.Y - 6)" width="12" height="12"
+              rx="2" fill="#6366f1" stroke="white" stroke-width="2"
+              pointer-events="none"/>
+
+        @* Invisible wider click area for target handle *@
+        <circle cx="@F(ep.X)" cy="@F(ep.Y)" r="10"
+                fill="rgba(0,0,0,0)"
+                style="cursor:grab;"
+                pointer-events="all"
+                @onmousedown="(e) => OnEndpointDragStart.InvokeAsync((e, Connection!, false))"
+                @onmousedown:stopPropagation="true"/>
+        @* Visible target handle square *@
+        <rect x="@F(ep.X - 6)" y="@F(ep.Y - 6)" width="12" height="12"
+              rx="2" fill="#6366f1" stroke="white" stroke-width="2"
+              pointer-events="none"/>
+    }
+
+    @if (isLoop)
+    {
+        var lx = F(labelPos.X);
+        var ly = F(labelPos.Y);
+        var html =
+            $"<text x=\"{lx}\" y=\"{ly}\" text-anchor=\"middle\" " +
+            $"font-size=\"12\" font-family=\"Inter,system-ui,sans-serif\" " +
+            $"font-weight=\"700\" fill=\"#f59e0b\" pointer-events=\"none\" " +
+            $"style=\"user-select:none;\">{System.Net.WebUtility.HtmlEncode(loopText)}</text>";
+        @((MarkupString)html)
+    }
+    else if (!string.IsNullOrWhiteSpace(Connection.ConnectionLabel))
+    {
+        var mid  = Midpoint(sp, ep);
+        var html =
+            $"<text x=\"{F(mid.X)}\" y=\"{F(mid.Y - 8)}\" text-anchor=\"middle\" " +
+            $"font-size=\"11\" font-family=\"Inter,system-ui,sans-serif\" " +
+            $"fill=\"#6b7280\" pointer-events=\"none\" " +
+            $"style=\"user-select:none;\">{System.Net.WebUtility.HtmlEncode(Connection.ConnectionLabel)}</text>";
+        @((MarkupString)html)
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public ConnectionArtifact? Connection      { get; set; }
+    [Parameter]                 public PointF?             StartPoint      { get; set; }
+    [Parameter]                 public PointF?             EndPoint        { get; set; }
+    [Parameter]                 public FlowArtifact?       SourceArtifact  { get; set; }
+    [Parameter]                 public FlowArtifact?       TargetArtifact  { get; set; }
+    [Parameter]                 public EventCallback<ConnectionArtifact> OnClick    { get; set; }
+    [Parameter]                 public EventCallback<ConnectionArtifact> OnDblClick { get; set; }
+    /// <summary>Fired when user starts dragging an endpoint handle.
+    /// Tuple: (MouseEventArgs, Connection, isSource=true means source handle)</summary>
+    [Parameter] public EventCallback<(MouseEventArgs E, ConnectionArtifact Conn, bool IsSource)> OnEndpointDragStart { get; set; }
+
+    private bool _isHovered;
+
+    private static string F(double v) => v.ToString("F2", CultureInfo.InvariantCulture);
+
+    private async Task HandleClick()    => await OnClick.InvokeAsync(Connection);
+    private async Task HandleDblClick() => await OnDblClick.InvokeAsync(Connection);
+
+    // ── Standard path ─────────────────────────────────────────────────────────
+    private static string BuildPath(PointF sp, PointF ep, LineType lt,
+        FlowArtifact? src, string? srcPortId) => lt switch
+    {
+        LineType.Straight   => $"M {F(sp.X)} {F(sp.Y)} L {F(ep.X)} {F(ep.Y)}",
+        LineType.Curved     => $"M {F(sp.X)} {F(sp.Y)} C {F(sp.X)} {F((sp.Y+ep.Y)/2)} {F(ep.X)} {F((sp.Y+ep.Y)/2)} {F(ep.X)} {F(ep.Y)}",
+        LineType.Orthogonal => BuildOrthogonalPath(sp, ep, src, srcPortId),
+        _ => $"M {F(sp.X)} {F(sp.Y)} L {F(ep.X)} {F(ep.Y)}"
+    };
+
+    private static string BuildOrthogonalPath(PointF sp, PointF ep,
+        FlowArtifact? src, string? srcPortId)
+    {
+        // If source is a Switch case port (right-side exit), route horizontally first
+        if (src is SwitchArtifact && srcPortId != null &&
+            srcPortId != SwitchArtifact.InPortId &&
+            srcPortId != SwitchArtifact.ElsePortId)
+        {
+            // Exit right by 30px, then go to target
+            double exitX = sp.X + 30;
+            if (ep.X > exitX)
+            {
+                // Target is to the right — go right then up/down
+                return $"M {F(sp.X)} {F(sp.Y)} L {F(exitX)} {F(sp.Y)} L {F(exitX)} {F(ep.Y)} L {F(ep.X)} {F(ep.Y)}";
+            }
+            else
+            {
+                // Target is to the left — exit right, drop/rise to midY, go left
+                double midY = (sp.Y + ep.Y) / 2;
+                return $"M {F(sp.X)} {F(sp.Y)} L {F(exitX)} {F(sp.Y)} L {F(exitX)} {F(midY)} L {F(ep.X)} {F(midY)} L {F(ep.X)} {F(ep.Y)}";
+            }
+        }
+
+        // Default orthogonal: vertical midpoint elbow
+        return $"M {F(sp.X)} {F(sp.Y)} L {F(sp.X)} {F((sp.Y+ep.Y)/2)} L {F(ep.X)} {F((sp.Y+ep.Y)/2)} L {F(ep.X)} {F(ep.Y)}";
+    }
+
+    // ── Loop path — routes 40px outside the leftmost/rightmost artifact edge ──
+    private static string BuildLoopPath(PointF sp, PointF ep, LoopSide side,
+        FlowArtifact? src, FlowArtifact? tgt)
+    {
+        const double offset = 40.0;
+        const double drop   = 20.0;
+
+        double refX;
+        if (side == LoopSide.Left)
+        {
+            var leftEdge = Math.Min(
+                src != null ? src.X : sp.X,
+                tgt != null ? tgt.X : ep.X);
+            refX = leftEdge - offset;
+        }
+        else
+        {
+            var rightEdge = Math.Max(
+                src != null ? src.X + src.Width : sp.X,
+                tgt != null ? tgt.X + tgt.Width : ep.X);
+            refX = rightEdge + offset;
+        }
+
+        // Drop 20px from source port before turning sideways
+        // Rise 20px before turning inward to target port
+        return $"M {F(sp.X)} {F(sp.Y)} " +               // source port
+               $"L {F(sp.X)} {F(sp.Y + drop)} " +         // drop down
+               $"L {F(refX)} {F(sp.Y + drop)} " +         // go sideways
+               $"L {F(refX)} {F(ep.Y - drop)} " +         // go up
+               $"L {F(ep.X)} {F(ep.Y - drop)} " +         // go inward
+               $"L {F(ep.X)} {F(ep.Y)}";                  // drop into target port
+    }
+
+    // ── Loop label — sits on the vertical segment, slightly outside ───────────
+    private static PointF GetLoopLabelPoint(PointF sp, PointF ep, LoopSide side,
+        FlowArtifact? src, FlowArtifact? tgt)
+    {
+        const double offset = 40.0;
+        double refX;
+
+        if (side == LoopSide.Left)
+        {
+            var leftEdge = Math.Min(
+                src != null ? src.X : sp.X,
+                tgt != null ? tgt.X : ep.X);
+            refX = leftEdge - offset;
+        }
+        else
+        {
+            var rightEdge = Math.Max(
+                src != null ? src.X + src.Width : sp.X,
+                tgt != null ? tgt.X + tgt.Width : ep.X);
+            refX = rightEdge + offset;
+        }
+
+        // Label sits on vertical segment between the two horizontal turns
+        const double drop = 20.0;
+        var midY   = ((sp.Y + drop) + (ep.Y - drop)) / 2;
+        var labelX = side == LoopSide.Left ? refX - 16 : refX + 16;
+        return new PointF(labelX, midY);
+    }
+
+    private static PointF Midpoint(PointF a, PointF b) =>
+        new((a.X + b.X) / 2, (a.Y + b.Y) / 2);
+
+    private RenderFragment RenderMarkerShape(ArrowTerminator t, string stroke) => t switch
+    {
+        ArrowTerminator.Arrow or ArrowTerminator.FilledArrow => __builder =>
+        {
+            __builder.OpenElement(0, "polygon");
+            __builder.AddAttribute(1, "points", "0 0, 10 3.5, 0 7");
+            __builder.AddAttribute(2, "fill", stroke);
+            __builder.CloseElement();
+        },
+        ArrowTerminator.OpenArrow => __builder =>
+        {
+            __builder.OpenElement(0, "polyline");
+            __builder.AddAttribute(1, "points", "0 0, 10 3.5, 0 7");
+            __builder.AddAttribute(2, "fill", "none");
+            __builder.AddAttribute(3, "stroke", stroke);
+            __builder.AddAttribute(4, "stroke-width", "1.5");
+            __builder.CloseElement();
+        },
+        ArrowTerminator.Diamond => __builder =>
+        {
+            __builder.OpenElement(0, "polygon");
+            __builder.AddAttribute(1, "points", "0 3.5, 5 0, 10 3.5, 5 7");
+            __builder.AddAttribute(2, "fill", stroke);
+            __builder.CloseElement();
+        },
+        ArrowTerminator.Circle => __builder =>
+        {
+            __builder.OpenElement(0, "circle");
+            __builder.AddAttribute(1, "cx", "5");
+            __builder.AddAttribute(2, "cy", "3.5");
+            __builder.AddAttribute(3, "r", "3");
+            __builder.AddAttribute(4, "fill", stroke);
+            __builder.CloseElement();
+        },
+        _ => __builder => { }
+    };
+}

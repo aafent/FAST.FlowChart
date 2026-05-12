@@ -1,0 +1,12 @@
+@using FlowChartEditor.Models
+
+@* Each artifact renders itself via its own RenderSvgShape() method.
+   No switch statement needed here — full OOP dispatch. *@
+@if (Artifact != null)
+{
+    @((MarkupString)Artifact.RenderSvgShape())
+}
+
+@code {
+    [Parameter, EditorRequired] public FlowArtifact? Artifact { get; set; }
+}

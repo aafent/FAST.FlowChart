@@ -1,0 +1,1385 @@
+@using FlowChartEditor.Models
+@using FlowChartEditor.Models.Artifacts
+
+@if (IsVisible && Artifact != null)
+{
+    <div class="fc-modal-overlay" @onclick="Cancel">
+        <div class="fc-modal" @onclick:stopPropagation="true">
+
+            <div class="fc-modal-header">
+                <h3>@ModalTitle</h3>
+                <button class="fc-modal-close" @onclick="Cancel">✕</button>
+            </div>
+
+            <div class="fc-modal-body" style="padding:0;">
+
+                @if (Artifact is ConnectionArtifact conn)
+                {
+                    @* ── Connection properties — unchanged ── *@
+                    <div style="padding:16px 20px; display:flex; flex-direction:column; gap:14px;">
+                        <div class="fc-prop-group">
+                            <label class="fc-prop-label">Line Type</label>
+                            <select class="fc-prop-select" @bind="_lineTypeStr">
+                                @foreach (var lt in Enum.GetValues<LineType>())
+                                {
+                                    <option value="@lt">@lt@(lt == LineType.Loop ? " (↺ Loop)" : "")</option>
+                                }
+                            </select>
+                        </div>
+
+                        @if (_lineTypeStr == nameof(LineType.Loop))
+                        {
+                            <div class="fc-loop-section">
+                                <div class="fc-loop-badge">↺ Loop Line</div>
+                                <div class="fc-prop-group">
+                                    <label class="fc-prop-label">Loop Text (appears as: ↺ your text)</label>
+                                    <input class="fc-prop-input" type="text" @bind="_loopLabel"
+                                           placeholder="e.g. retry, next iteration, repeat…"/>
+                                </div>
+                                <div class="fc-prop-group">
+                                    <label class="fc-prop-label">Route Side</label>
+                                    <select class="fc-prop-select" @bind="_loopSideStr">
+                                        <option value="Left">← Left</option>
+                                        <option value="Right">Right →</option>
+                                    </select>
+                                </div>
+                                <div class="fc-loop-info">
+                                    <span>●</span> Start: Filled circle &nbsp;|&nbsp;
+                                    <span>▶</span> End: Filled arrow &nbsp;|&nbsp;
+                                    Color: <span style="color:#f59e0b;font-weight:600;">Amber</span>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="fc-prop-group">
+                                <label class="fc-prop-label">Connection Label</label>
+                                <input class="fc-prop-input" type="text" @bind="_connectionLabel"
+                                       placeholder="e.g. Yes, No, OK…"/>
+                            </div>
+                            <div class="fc-prop-group">
+                                <label class="fc-prop-label">Line Color</label>
+                                <div class="fc-lov-wrapper">
+                                    <select class="fc-prop-select" @bind="_lineColor">
+                                        @foreach (var color in ConnectionArtifact.LineColors)
+                                        {
+                                            <option value="@color.Value">@color.Key</option>
+                                        }
+                                    </select>
+                                    <div class="fc-lov-swatch" style="background:@_lineColor;"></div>
+                                </div>
+                            </div>
+                            <div class="fc-prop-row">
+                                <div class="fc-prop-group fc-prop-half">
+                                    <label class="fc-prop-label">Start Terminator</label>
+                                    <select class="fc-prop-select" @bind="_startTermStr">
+                                        @foreach (var t in Enum.GetValues<ArrowTerminator>())
+                                        { <option value="@t">@t</option> }
+                                    </select>
+                                </div>
+                                <div class="fc-prop-group fc-prop-half">
+                                    <label class="fc-prop-label">End Terminator</label>
+                                    <select class="fc-prop-select" @bind="_endTermStr">
+                                        @foreach (var t in Enum.GetValues<ArrowTerminator>())
+                                        { <option value="@t">@t</option> }
+                                    </select>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    @* ── Artifact tabs ── *@
+                    <div class="fc-modal-tabs">
+                        <button class="fc-modal-tab @(_activeTab == 0 ? "active" : "")"
+                                @onclick="() => _activeTab = 0">Properties</button>
+                        <button class="fc-modal-tab @(_activeTab == 1 ? "active" : "")"
+                                @onclick="() => _activeTab = 1">General</button>
+                        @if (Artifact is StartTerminalArtifact)
+                        {
+                            <button class="fc-modal-tab @(_activeTab == 2 ? "active" : "")"
+                                    @onclick="() => _activeTab = 2">Variables</button>
+                            <button class="fc-modal-tab @(_activeTab == 3 ? "active" : "")"
+                                    @onclick="() => _activeTab = 3">Arguments</button>
+                        }
+                        @if (Artifact is EndTerminalArtifact)
+                        {
+                            <button class="fc-modal-tab @(_activeTab == 2 ? "active" : "")"
+                                    @onclick="() => _activeTab = 2">Outputs</button>
+                        }
+                        @if (Artifact is DecisionTableArtifact)
+                        {
+                            <button class="fc-modal-tab @(_activeTab == 2 ? "active" : "")"
+                                    @onclick="() => _activeTab = 2">Rules Table</button>
+                        }
+                        @if (Artifact is SwitchArtifact)
+                        {
+                            <button class="fc-modal-tab @(_activeTab == 2 ? "active" : "")"
+                                    @onclick="() => _activeTab = 2">Cases</button>
+                        }
+                    </div>
+
+                    @* ── Tab 1: Properties ── *@
+                    @if (_activeTab == 0)
+                    {
+                        <div class="fc-modal-tab-content">
+
+                            @* Label — always first *@
+                            <div class="fc-prop-group">
+                                <label class="fc-prop-label">Label</label>
+                                <input class="fc-prop-input" type="text"
+                                       value="@_editLabel"
+                                       @oninput="(e) => _editLabel = e.Value?.ToString() ?? string.Empty"
+                                       placeholder="Label shown on canvas"/>
+                            </div>
+
+                            @* Type-specific fields — dynamic, runtime collection *@
+                            @if (_typeDefs.Any())
+                            {
+                                <div class="fc-prop-divider"></div>
+                                @foreach (var field in _typeDefs)
+                                {
+                                    <div class="fc-prop-group">
+                                        <label class="fc-prop-label">
+                                            @field.Label
+                                            @if (field.IsRequired){ <span class="fc-required">*</span> }
+                                        </label>
+                                        @RenderField(field)
+                                    </div>
+                                }
+                            }
+
+                        </div>
+                    }
+
+                    @* ── Tab 2: General ── *@
+                    @if (_activeTab == 1)
+                    {
+                        <div class="fc-modal-tab-content">
+
+                            @* Base fields — Notes, Tag *@
+                            @foreach (var field in _baseDefs)
+                            {
+                                <div class="fc-prop-group">
+                                    <label class="fc-prop-label">@field.Label</label>
+                                    @RenderField(field)
+                                </div>
+                            }
+
+                            @* Loop Participation — read-only display *@
+                            <div class="fc-prop-divider"></div>
+                            <div class="fc-prop-section-title">↺ Loop Participation</div>
+                            <div class="fc-loop-flags">
+                                <div class="fc-readonly-flag">
+                                    <span class="fc-readonly-indicator @(_canBeLoopBegin ? "fc-flag-yes" : "fc-flag-no")">
+                                        @(_canBeLoopBegin ? "✓" : "✗")
+                                    </span>
+                                    Can be Loop Begin (source of a loop line)
+                                </div>
+                                <div class="fc-readonly-flag">
+                                    <span class="fc-readonly-indicator @(_canBeLoopEnd ? "fc-flag-yes" : "fc-flag-no")">
+                                        @(_canBeLoopEnd ? "✓" : "✗")
+                                    </span>
+                                    Can be Loop End (target of a loop line)
+                                </div>
+                            </div>
+
+                        </div>
+                    }
+
+                    @* ── Tab 3: Variables (StartTerminal only) ── *@
+                    @if (_activeTab == 2 && Artifact is StartTerminalArtifact startArt)
+                    {
+                        <div class="fc-modal-tab-content fc-vars-tab">
+
+                            @* Toolbar *@
+                            <div class="fc-vars-toolbar">
+                                <button class="fc-btn fc-btn-primary fc-btn-sm" @onclick="AddVariable">+ Add Variable</button>
+                                <div class="fc-vars-sort-group">
+                                    <span class="fc-vars-sort-label">Sort by:</span>
+                                    <button class="fc-btn fc-btn-ghost fc-btn-sm @(_sortCol == "name" ? "active" : "")"
+                                            @onclick='() => SortBy("name")'>
+                                        Name @SortIcon("name")
+                                    </button>
+                                    <button class="fc-btn fc-btn-ghost fc-btn-sm @(_sortCol == "type" ? "active" : "")"
+                                            @onclick='() => SortBy("type")'>
+                                        Type @SortIcon("type")
+                                    </button>
+                                </div>
+                            </div>
+
+                            @* Validation message *@
+                            @if (!string.IsNullOrEmpty(_varError))
+                            {
+                                <div class="fc-var-error">⚠ @_varError</div>
+                            }
+
+                            @* Grid header *@
+                            <div class="fc-vars-grid">
+                                <div class="fc-vars-header">
+                                    <div class="fc-vars-col fc-vars-col-order"></div>
+                                    <div class="fc-vars-col fc-vars-col-name">Variable Name</div>
+                                    <div class="fc-vars-col fc-vars-col-type">Type</div>
+                                    <div class="fc-vars-col fc-vars-col-value">Initial Value</div>
+                                    <div class="fc-vars-col fc-vars-col-actions"></div>
+                                </div>
+
+                                @* Rows *@
+                                @for (int i = 0; i < _editVariables.Count; i++)
+                                {
+                                    var idx = i;
+                                    var v   = _editVariables[idx];
+                                    <div class="fc-vars-row @(_dragRowIdx == idx ? "fc-vars-row-dragging" : "")"
+                                         draggable="true"
+                                         @ondragstart="() => _dragRowIdx = idx"
+                                         @ondragover:preventDefault="true"
+                                         @ondrop="() => DropRow(idx)">
+
+                                        @* Drag handle *@
+                                        <div class="fc-vars-col fc-vars-col-order fc-drag-handle" title="Drag to reorder">⠿</div>
+
+                                        @* Name *@
+                                        <div class="fc-vars-col fc-vars-col-name">
+                                            <input class="fc-var-input @(IsDuplicateName(v, idx) ? "fc-var-input-error" : "")"
+                                                   type="text"
+                                                   value="@v.Name"
+                                                   placeholder="variableName"
+                                                   @oninput="(e) => { _editVariables[idx].Name = e.Value?.ToString() ?? string.Empty; ValidateVariables(); }"/>
+                                        </div>
+
+                                        @* Type *@
+                                        <div class="fc-vars-col fc-vars-col-type">
+                                            <select class="fc-var-select"
+                                                    value="@v.Type"
+                                                    @onchange="(e) => { if(Enum.TryParse<VariableType>(e.Value?.ToString(), out var vt)) _editVariables[idx].Type = vt; }">
+                                                @foreach (var vt in Enum.GetValues<VariableType>())
+                                                {
+                                                    <option value="@vt">@vt</option>
+                                                }
+                                            </select>
+                                        </div>
+
+                                        @* Initial Value *@
+                                        <div class="fc-vars-col fc-vars-col-value">
+                                            @if (v.Type == VariableType.Numeric)
+                                            {
+                                                <input class="fc-var-input" type="number" step="any"
+                                                       value="@v.InitialValue"
+                                                       @oninput="(e) => _editVariables[idx].InitialValue = e.Value?.ToString() ?? string.Empty"/>
+                                            }
+                                            else if (v.Type == VariableType.Date)
+                                            {
+                                                <input class="fc-var-input" type="date"
+                                                       value="@v.InitialValue"
+                                                       @oninput="(e) => _editVariables[idx].InitialValue = e.Value?.ToString() ?? string.Empty"/>
+                                            }
+                                            else if (v.Type == VariableType.Button)
+                                            {
+                                                <input class="fc-var-input" type="text"
+                                                       value="@v.InitialValue"
+                                                       placeholder="Button label"
+                                                       @oninput="(e) => _editVariables[idx].InitialValue = e.Value?.ToString() ?? string.Empty"/>
+                                            }
+                                            else if (v.Type == VariableType.ListOfValues)
+                                            {
+                                                <input class="fc-var-input" type="text"
+                                                       value="@v.InitialValue"
+                                                       placeholder="val1/val2/val3 (slash separated)"
+                                                       @oninput="(e) => _editVariables[idx].InitialValue = e.Value?.ToString() ?? string.Empty"/>
+                                            }
+                                            else
+                                            {
+                                                <input class="fc-var-input" type="text"
+                                                       value="@v.InitialValue"
+                                                       placeholder="(empty)"
+                                                       @oninput="(e) => _editVariables[idx].InitialValue = e.Value?.ToString() ?? string.Empty"/>
+                                            }
+                                        </div>
+
+                                        @* Delete *@
+                                        <div class="fc-vars-col fc-vars-col-actions">
+                                            <button class="fc-var-delete" title="Delete" @onclick="() => DeleteVariable(idx)">✕</button>
+                                        </div>
+                                    </div>
+                                }
+
+                                @if (_editVariables.Count == 0)
+                                {
+                                    <div class="fc-vars-empty">No variables defined. Click "+ Add Variable" to begin.</div>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    @* ── Tab 4: Arguments (StartTerminal only) ── *@
+                    @if (_activeTab == 3 && Artifact is StartTerminalArtifact)
+                    {
+                        <div class="fc-modal-tab-content fc-vars-tab">
+
+                            @* Toolbar *@
+                            <div class="fc-vars-toolbar">
+                                <button class="fc-btn fc-btn-primary fc-btn-sm" @onclick="AddArgument">+ Add Argument</button>
+                                <div class="fc-vars-sort-group">
+                                    <span class="fc-vars-sort-label">Sort by:</span>
+                                    <button class="fc-btn fc-btn-ghost fc-btn-sm @(_argSortCol == "name" ? "active" : "")"
+                                            @onclick='() => SortArgsBy("name")'>
+                                        Name @ArgSortIcon("name")
+                                    </button>
+                                    <button class="fc-btn fc-btn-ghost fc-btn-sm @(_argSortCol == "type" ? "active" : "")"
+                                            @onclick='() => SortArgsBy("type")'>
+                                        Type @ArgSortIcon("type")
+                                    </button>
+                                </div>
+                            </div>
+
+                            @* Validation message *@
+                            @if (!string.IsNullOrEmpty(_argError))
+                            {
+                                <div class="fc-var-error">⚠ @_argError</div>
+                            }
+
+                            @* Grid *@
+                            <div class="fc-vars-grid">
+                                <div class="fc-vars-header">
+                                    <div class="fc-vars-col fc-vars-col-order"></div>
+                                    <div class="fc-vars-col fc-vars-col-name">Argument Name</div>
+                                    <div class="fc-vars-col fc-vars-col-type">Type</div>
+                                    <div class="fc-vars-col fc-vars-col-value">Initial Value</div>
+                                    <div class="fc-vars-col fc-vars-col-actions"></div>
+                                </div>
+
+                                @for (int i = 0; i < _editArguments.Count; i++)
+                                {
+                                    var idx = i;
+                                    var v   = _editArguments[idx];
+                                    <div class="fc-vars-row @(_argDragRowIdx == idx ? "fc-vars-row-dragging" : "")"
+                                         draggable="true"
+                                         @ondragstart="() => _argDragRowIdx = idx"
+                                         @ondragover:preventDefault="true"
+                                         @ondrop="() => DropArgRow(idx)">
+
+                                        <div class="fc-vars-col fc-vars-col-order fc-drag-handle" title="Drag to reorder">⠿</div>
+
+                                        <div class="fc-vars-col fc-vars-col-name">
+                                            <input class="fc-var-input @(IsArgDuplicateName(v, idx) ? "fc-var-input-error" : "")"
+                                                   type="text"
+                                                   value="@v.Name"
+                                                   placeholder="argumentName"
+                                                   @oninput="(e) => { _editArguments[idx].Name = e.Value?.ToString() ?? string.Empty; ValidateArguments(); }"/>
+                                        </div>
+
+                                        <div class="fc-vars-col fc-vars-col-type">
+                                            <select class="fc-var-select"
+                                                    value="@v.Type"
+                                                    @onchange="(e) => { if(Enum.TryParse<VariableType>(e.Value?.ToString(), out var vt)) _editArguments[idx].Type = vt; }">
+                                                @foreach (var vt in Enum.GetValues<VariableType>())
+                                                {
+                                                    <option value="@vt">@vt</option>
+                                                }
+                                            </select>
+                                        </div>
+
+                                        <div class="fc-vars-col fc-vars-col-value">
+                                            @if (v.Type == VariableType.Numeric)
+                                            {
+                                                <input class="fc-var-input" type="number" step="any"
+                                                       value="@v.InitialValue"
+                                                       @oninput="(e) => _editArguments[idx].InitialValue = e.Value?.ToString() ?? string.Empty"/>
+                                            }
+                                            else if (v.Type == VariableType.Date)
+                                            {
+                                                <input class="fc-var-input" type="date"
+                                                       value="@v.InitialValue"
+                                                       @oninput="(e) => _editArguments[idx].InitialValue = e.Value?.ToString() ?? string.Empty"/>
+                                            }
+                                            else if (v.Type == VariableType.Button)
+                                            {
+                                                <input class="fc-var-input" type="text"
+                                                       value="@v.InitialValue"
+                                                       placeholder="Button label"
+                                                       @oninput="(e) => _editArguments[idx].InitialValue = e.Value?.ToString() ?? string.Empty"/>
+                                            }
+                                            else if (v.Type == VariableType.ListOfValues)
+                                            {
+                                                <input class="fc-var-input" type="text"
+                                                       value="@v.InitialValue"
+                                                       placeholder="val1/val2/val3"
+                                                       @oninput="(e) => _editArguments[idx].InitialValue = e.Value?.ToString() ?? string.Empty"/>
+                                            }
+                                            else
+                                            {
+                                                <input class="fc-var-input" type="text"
+                                                       value="@v.InitialValue"
+                                                       placeholder="(empty)"
+                                                       @oninput="(e) => _editArguments[idx].InitialValue = e.Value?.ToString() ?? string.Empty"/>
+                                            }
+                                        </div>
+
+                                        <div class="fc-vars-col fc-vars-col-actions">
+                                            <button class="fc-var-delete" title="Delete" @onclick="() => DeleteArgument(idx)">✕</button>
+                                        </div>
+                                    </div>
+                                }
+
+                                @if (_editArguments.Count == 0)
+                                {
+                                    <div class="fc-vars-empty">No arguments defined. Click "+ Add Argument" to begin.</div>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    @* ── Tab 3: Outputs (EndTerminal only) ── *@
+                    @if (_activeTab == 2 && Artifact is EndTerminalArtifact)
+                    {
+                        <div class="fc-modal-tab-content fc-vars-tab">
+
+                            @* Build datalist from all StartTerminals *@
+                            <datalist id="fc-output-values">
+                                @foreach (var item in _outputSuggestions)
+                                {
+                                    <option value="@item.Value" style="color:@item.Color">@item.Value</option>
+                                }
+                            </datalist>
+
+                            @* Toolbar *@
+                            <div class="fc-vars-toolbar">
+                                <button class="fc-btn fc-btn-primary fc-btn-sm" @onclick="AddOutput">+ Add Output</button>
+                                <div class="fc-vars-sort-group">
+                                    <span class="fc-vars-sort-label">Sort by:</span>
+                                    <button class="fc-btn fc-btn-ghost fc-btn-sm @(_outSortCol == "name" ? "active" : "")"
+                                            @onclick='() => SortOutputsBy("name")'>
+                                        Name @OutSortIcon("name")
+                                    </button>
+                                </div>
+                            </div>
+
+                            @* Validation *@
+                            @if (!string.IsNullOrEmpty(_outError))
+                            {
+                                <div class="fc-var-error">⚠ @_outError</div>
+                            }
+
+                            @* Color legend *@
+                            <div class="fc-out-legend">
+                                <span class="fc-out-legend-item fc-out-arg">■ Arguments</span>
+                                <span class="fc-out-legend-item fc-out-var">■ Variables</span>
+                                <span class="fc-out-legend-item fc-out-free">Free text also accepted</span>
+                            </div>
+
+                            @* Grid *@
+                            <div class="fc-vars-grid">
+                                <div class="fc-vars-header">
+                                    <div class="fc-vars-col fc-vars-col-order"></div>
+                                    <div class="fc-vars-col fc-vars-col-value">Value From</div>
+                                    <div class="fc-vars-col fc-vars-col-name">Output Name</div>
+                                    <div class="fc-vars-col fc-vars-col-actions"></div>
+                                </div>
+
+                                @for (int i = 0; i < _editOutputs.Count; i++)
+                                {
+                                    var idx = i;
+                                    var o   = _editOutputs[idx];
+                                    <div class="fc-vars-row @(_outDragRowIdx == idx ? "fc-vars-row-dragging" : "")"
+                                         draggable="true"
+                                         @ondragstart="() => _outDragRowIdx = idx"
+                                         @ondragover:preventDefault="true"
+                                         @ondrop="() => DropOutputRow(idx)">
+
+                                        <div class="fc-vars-col fc-vars-col-order fc-drag-handle" title="Drag to reorder">⠿</div>
+
+                                        @* Value From — 1st column *@
+                                        <div class="fc-vars-col fc-vars-col-value">
+                                            <input class="fc-var-input fc-out-value-input"
+                                                   type="text"
+                                                   list="fc-output-values"
+                                                   value="@o.Value"
+                                                   placeholder="Select or type a value…"
+                                                   style="color:@GetValueColor(o.Value);"
+                                                   @oninput="(e) => { _editOutputs[idx].Value = e.Value?.ToString() ?? string.Empty; AutoFillName(idx); ValidateOutputs(); }"/>
+                                        </div>
+
+                                        @* Output Name — 2nd column, auto-filled from Value if empty *@
+                                        <div class="fc-vars-col fc-vars-col-name">
+                                            <input class="fc-var-input @(IsOutDuplicateName(o, idx) ? "fc-var-input-error" : "")"
+                                                   type="text"
+                                                   value="@o.Name"
+                                                   placeholder="auto from value"
+                                                   @oninput="(e) => { _editOutputs[idx].Name = e.Value?.ToString() ?? string.Empty; ValidateOutputs(); }"/>
+                                        </div>
+
+                                        <div class="fc-vars-col fc-vars-col-actions">
+                                            <button class="fc-var-delete" title="Delete" @onclick="() => DeleteOutput(idx)">✕</button>
+                                        </div>
+                                    </div>
+                                }
+
+                                @if (_editOutputs.Count == 0)
+                                {
+                                    <div class="fc-vars-empty">No outputs defined. Click "+ Add Output" to begin.</div>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    @* ── Tab 3: Rules Table (DecisionTable only) ── *@
+                    @if (_activeTab == 2 && Artifact is DecisionTableArtifact dtArt)
+                    {
+                        <div class="fc-modal-tab-content fc-dt-tab">
+
+                            @* Toolbar *@
+                            <div class="fc-vars-toolbar">
+                                <button class="fc-btn fc-btn-primary fc-btn-sm" @onclick="DtAddFactor">+ Add Factor</button>
+                                <button class="fc-btn fc-btn-secondary fc-btn-sm" @onclick="DtAddRow">+ Add Row</button>
+                                @if (!string.IsNullOrEmpty(_dtError))
+                                {
+                                    <span class="fc-var-error" style="margin-left:8px;">⚠ @_dtError</span>
+                                }
+                            </div>
+
+                            @* Legend *@
+                            <div class="fc-dt-legend">
+                                <span class="fc-dt-legend-item fc-dt-legend-header">■ Header</span>
+                                <span class="fc-dt-legend-item fc-dt-legend-factor">■ Condition</span>
+                                <span class="fc-dt-legend-item fc-dt-legend-result">■ Result (last column)</span>
+                                <span class="fc-dt-legend-hint">Criteria: exact <code>0</code>, range <code>23:45</code>, comparison <code>&gt;=3</code>, wildcard <code>*</code></span>
+                            </div>
+
+                            @* Grid *@
+                            <div class="fc-dt-grid-wrap">
+                                <table class="fc-dt-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="fc-dt-th fc-dt-th-handle"></th>
+                                            @for (int c = 0; c < _dtFactors.Count; c++)
+                                            {
+                                                var ci = c;
+                                                bool isResult = ci == _dtFactors.Count - 1;
+                                                <th class="fc-dt-th @(isResult ? "fc-dt-th-result" : "fc-dt-th-factor")">
+                                                    <div class="fc-dt-header-cell">
+                                                        <input class="fc-dt-header-input"
+                                                               type="text"
+                                                               value="@_dtFactors[ci].Name"
+                                                               placeholder="Factor name"
+                                                               @oninput="(e) => { _dtFactors[ci].Name = e.Value?.ToString() ?? string.Empty; ValidateDt(); }"
+                                                               title="@(isResult ? "Result column (always last)" : "Condition factor")"/>
+                                                        @if (_dtFactors.Count > 2)
+                                                        {
+                                                            <button class="fc-dt-col-del" title="Remove factor"
+                                                                    @onclick="() => DtRemoveFactor(ci)">✕</button>
+                                                        }
+                                                    </div>
+                                                    @if (isResult)
+                                                    {
+                                                        <div class="fc-dt-result-badge">RESULT</div>
+                                                    }
+                                                </th>
+                                            }
+                                            <th class="fc-dt-th fc-dt-th-actions"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @for (int r = 0; r < _dtRows.Count; r++)
+                                        {
+                                            var ri = r;
+                                            var row = _dtRows[ri];
+                                            <tr class="fc-dt-row @(_dtDragRowIdx == ri ? "fc-vars-row-dragging" : "")"
+                                                draggable="true"
+                                                @ondragstart="() => _dtDragRowIdx = ri"
+                                                @ondragover:preventDefault="true"
+                                                @ondrop="() => DtDropRow(ri)">
+                                                <td class="fc-dt-td fc-dt-td-handle fc-drag-handle" title="Drag to reorder">⠿</td>
+                                                @for (int c = 0; c < _dtFactors.Count; c++)
+                                                {
+                                                    var ci = c;
+                                                    bool isResult = ci == _dtFactors.Count - 1;
+                                                    // Ensure values list is long enough
+                                                    while (row.Values.Count <= ci) row.Values.Add("*");
+                                                    <td class="fc-dt-td @(isResult ? "fc-dt-td-result" : "fc-dt-td-factor")">
+                                                        <input class="fc-dt-cell-input @(isResult ? "fc-dt-cell-result" : "")"
+                                                               type="text"
+                                                               value="@row.Values[ci]"
+                                                               placeholder="@(isResult ? "value" : "*")"
+                                                               @oninput="(e) => { _dtRows[ri].Values[ci] = e.Value?.ToString() ?? string.Empty; }"/>
+                                                    </td>
+                                                }
+                                                <td class="fc-dt-td fc-dt-td-actions">
+                                                    <button class="fc-var-delete" title="Remove row" @onclick="() => DtRemoveRow(ri)">✕</button>
+                                                </td>
+                                            </tr>
+                                        }
+                                        @if (_dtRows.Count == 0)
+                                        {
+                                            <tr>
+                                                <td colspan="@(_dtFactors.Count + 2)" class="fc-vars-empty">
+                                                    No rules defined. Click "+ Add Row" to add the first rule.
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+
+                        </div>
+                    }
+
+                    @* ── Tab 3: Cases (Switch only) ── *@
+                    @if (_activeTab == 2 && Artifact is SwitchArtifact swArt)
+                    {
+                        <div class="fc-modal-tab-content fc-vars-tab">
+
+                            @* Variable datalist *@
+                            <datalist id="fc-switch-vars">
+                                @foreach (var s in _switchVarSuggestions)
+                                {
+                                    <option value="@s">@s</option>
+                                }
+                            </datalist>
+
+                            @* Switch variable picker *@
+                            <div class="fc-prop-group" style="padding: 12px 16px 8px 16px;">
+                                <label class="fc-prop-label">Switch Variable / Argument</label>
+                                <input class="fc-prop-input"
+                                       type="text"
+                                       list="fc-switch-vars"
+                                       value="@_switchVariable"
+                                       placeholder="Select or type variable name…"
+                                       @oninput="(e) => _switchVariable = e.Value?.ToString() ?? string.Empty"/>
+                            </div>
+
+                            <div class="fc-prop-divider"></div>
+
+                            @* Toolbar *@
+                            <div class="fc-vars-toolbar">
+                                <button class="fc-btn fc-btn-primary fc-btn-sm" @onclick="SwAddCase">+ Add Case</button>
+                                @if (!string.IsNullOrEmpty(_swError))
+                                {
+                                    <span class="fc-var-error" style="margin-left:8px;">⚠ @_swError</span>
+                                }
+                            </div>
+
+                            @* Cases grid *@
+                            <div class="fc-vars-grid">
+                                <div class="fc-vars-header">
+                                    <div class="fc-vars-col fc-vars-col-order"></div>
+                                    <div class="fc-vars-col" style="flex:1;">Value</div>
+                                    <div class="fc-vars-col fc-vars-col-actions"></div>
+                                </div>
+
+                                @for (int i = 0; i < _swCases.Count; i++)
+                                {
+                                    var idx = i;
+                                    var c   = _swCases[idx];
+                                    <div class="fc-vars-row @(_swDragIdx == idx ? "fc-vars-row-dragging" : "")"
+                                         draggable="true"
+                                         @ondragstart="() => _swDragIdx = idx"
+                                         @ondragover:preventDefault="true"
+                                         @ondrop="() => SwDropCase(idx)">
+
+                                        <div class="fc-vars-col fc-vars-col-order fc-drag-handle" title="Drag to reorder">⠿</div>
+
+                                        <div class="fc-vars-col" style="flex:1;">
+                                            <input class="fc-var-input"
+                                                   type="text"
+                                                   value="@c.Value"
+                                                   placeholder="case value…"
+                                                   @oninput="(e) => { _swCases[idx].Value = e.Value?.ToString() ?? string.Empty; ValidateSw(); }"/>
+                                        </div>
+
+                                        <div class="fc-vars-col fc-vars-col-actions">
+                                            <button class="fc-var-delete" title="Remove case" @onclick="() => SwRemoveCase(idx)">✕</button>
+                                        </div>
+                                    </div>
+                                }
+
+                                @if (_swCases.Count == 0)
+                                {
+                                    <div class="fc-vars-empty">No cases defined. Click "+ Add Case" to begin.</div>
+                                }
+                            </div>
+
+                            @* Else footer info *@
+                            <div class="fc-dt-legend" style="margin-top:4px;">
+                                <span style="font-size:11px; color:#92400e; font-weight:600;">■ else</span>
+                                <span style="font-size:11px; color:#64748b;">Always present — output port at the bottom of the shape</span>
+                            </div>
+
+                        </div>
+                    }
+
+                }
+            </div>
+
+            <div class="fc-modal-footer">
+                <button class="fc-btn fc-btn-ghost"   @onclick="Cancel">Cancel</button>
+                <button class="fc-btn fc-btn-primary" @onclick="Save">Save</button>
+            </div>
+
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public FlowArtifact? Artifact  { get; set; }
+    [Parameter] public bool          IsVisible  { get; set; }
+    [Parameter] public FlowChart?    Chart      { get; set; }  // needed to resolve StartTerminal data
+
+    [Parameter] public EventCallback<(FlowArtifact Artifact, string Label,
+        List<PropertyValue> Values, bool CanBeLoopBegin, bool CanBeLoopEnd)> OnSave { get; set; }
+
+    [Parameter] public EventCallback<(ConnectionArtifact Conn, LineType LineType,
+        ArrowTerminator Start, ArrowTerminator End, string Label,
+        LoopSide LoopSide, string LoopLabel, string LineColor)> OnSaveConnection { get; set; }
+
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    // ── Tab state ─────────────────────────────────────────────────────────────
+    private int _activeTab = 0;
+
+    // ── Edit state ────────────────────────────────────────────────────────────
+    private string _editLabel       = string.Empty;
+    private Dictionary<string, string?> _editValues = new();
+
+    // Cached property definition lists
+    private List<PropertyFieldDefinition> _typeDefs = new();
+    private List<PropertyFieldDefinition> _baseDefs = new();
+
+    // Connection-specific state
+    private string _connectionLabel = string.Empty;
+    private string _lineTypeStr     = nameof(LineType.Orthogonal);
+    private string _startTermStr    = nameof(ArrowTerminator.None);
+    private string _endTermStr      = nameof(ArrowTerminator.Arrow);
+    private string _lineColor       = "#1e293b";
+    private string _loopLabel       = string.Empty;
+    private string _loopSideStr     = nameof(LoopSide.Left);
+
+    // Loop participation
+    private bool _canBeLoopBegin;
+    private bool _canBeLoopEnd;
+
+    // ── Variables (StartTerminal only) ────────────────────────────────────────
+    private List<FlowVariable> _editVariables = new();
+    private string _varError   = string.Empty;
+    private string _sortCol    = string.Empty;
+    private bool   _sortAsc    = true;
+    private int    _dragRowIdx = -1;
+
+    // ── Arguments (StartTerminal only) ───────────────────────────────────────
+    private List<FlowVariable> _editArguments = new();
+    private string _argError      = string.Empty;
+    private string _argSortCol    = string.Empty;
+    private bool   _argSortAsc    = true;
+    private int    _argDragRowIdx = -1;
+
+    // ── Outputs (EndTerminal only) ────────────────────────────────────────────
+    private List<FlowOutput>      _editOutputs       = new();
+    private List<OutputSuggestion> _outputSuggestions = new();
+    private string _outError      = string.Empty;
+    private string _outSortCol    = string.Empty;
+    private bool   _outSortAsc    = true;
+    private int    _outDragRowIdx = -1;
+
+    // ── Decision Table (DecisionTableArtifact only) ───────────────────────────
+    private List<DtFactor> _dtFactors    = new();
+    private List<DtRow>    _dtRows       = new();
+    private string         _dtError      = string.Empty;
+    private int            _dtDragRowIdx = -1;
+
+    // ── Switch (SwitchArtifact only) ──────────────────────────────────────────
+    private List<SwitchCase> _swCases           = new();
+    private string           _switchVariable    = string.Empty;
+    private List<string>     _switchVarSuggestions = new();
+    private string           _swError           = string.Empty;
+    private int              _swDragIdx         = -1;
+
+    private string ModalTitle => Artifact?.Type switch
+    {
+        ArtifactType.Connection => "Connection Properties",
+        _ => $"{Artifact?.Type} Properties"
+    };
+
+    protected override void OnParametersSet()
+    {
+        if (Artifact == null || !IsVisible) return;
+
+        _activeTab   = 0;
+        _editValues.Clear();
+
+        if (Artifact is ConnectionArtifact conn)
+        {
+            _lineTypeStr     = conn.LineType.ToString();
+            _startTermStr    = conn.StartTerminator.ToString();
+            _endTermStr      = conn.EndTerminator.ToString();
+            _connectionLabel = conn.ConnectionLabel;
+            _lineColor       = conn.LineColor;
+            _loopLabel       = conn.LoopLabel;
+            _loopSideStr     = conn.LoopSide.ToString();
+        }
+        else
+        {
+            _editLabel = Artifact.Label;
+
+            // Type-specific fields — skip "label" (shown separately at top)
+            _typeDefs = Artifact.GetPropertyDefinitions()
+                .Where(d => d.Key != "label")
+                .ToList();
+
+            // Base fields — Notes, Tag
+            _baseDefs = Artifact.GetBasePropertyDefinitions();
+
+            // Load all current values into edit dictionary
+            foreach (var pv in Artifact.PropertyValues)
+                _editValues[pv.Key] = pv.Value?.ToString();
+
+            // Ensure base keys exist in edit dictionary
+            foreach (var bd in _baseDefs)
+                if (!_editValues.ContainsKey(bd.Key))
+                    _editValues[bd.Key] = bd.DefaultValue?.ToString();
+
+            _canBeLoopBegin = Artifact.CanBeLoopBegin;
+            _canBeLoopEnd   = Artifact.CanBeLoopEnd;
+
+            // Load variables and arguments for StartTerminal
+            if (Artifact is StartTerminalArtifact sta)
+            {
+                _editVariables = sta.Variables.Select(v => v.Clone()).ToList();
+                _editArguments = sta.Arguments.Select(v => v.Clone()).ToList();
+            }
+            else
+            {
+                _editVariables.Clear();
+                _editArguments.Clear();
+            }
+            _varError   = string.Empty;
+            _sortCol    = string.Empty;
+            _sortAsc    = true;
+            _argError      = string.Empty;
+            _argSortCol    = string.Empty;
+            _argSortAsc    = true;
+
+            // Load outputs for EndTerminal
+            if (Artifact is EndTerminalArtifact eta)
+            {
+                _editOutputs       = eta.Outputs.Select(o => o.Clone()).ToList();
+                _outputSuggestions = BuildOutputSuggestions();
+            }
+            else
+            {
+                _editOutputs.Clear();
+                _outputSuggestions.Clear();
+            }
+            _outError      = string.Empty;
+            _outSortCol    = string.Empty;
+            _outSortAsc    = true;
+
+            // Load Decision Table factors and rows
+            if (Artifact is DecisionTableArtifact dta)
+            {
+                _dtFactors    = dta.Factors.Select(f => f.Clone()).ToList();
+                _dtRows       = dta.Rows.Select(r => r.Clone()).ToList();
+            }
+            else
+            {
+                _dtFactors.Clear();
+                _dtRows.Clear();
+            }
+            _dtError      = string.Empty;
+            _dtDragRowIdx = -1;
+
+            // Load Switch cases
+            if (Artifact is SwitchArtifact swa)
+            {
+                _swCases           = swa.Cases.Select(c => c.Clone()).ToList();
+                _switchVariable    = swa.SwitchVariable;
+                _switchVarSuggestions = BuildSwitchVarSuggestions();
+            }
+            else
+            {
+                _swCases.Clear();
+                _switchVariable = string.Empty;
+                _switchVarSuggestions.Clear();
+            }
+            _swError   = string.Empty;
+            _swDragIdx = -1;
+        }
+    }
+
+    private string? GetEditValue(string key) =>
+        _editValues.TryGetValue(key, out var v) ? v : string.Empty;
+
+    private void SetEditValue(string key, string? value) =>
+        _editValues[key] = value;
+
+    private static string FormatDate(string? val) =>
+        DateTime.TryParse(val, out var dt) ? dt.ToString("yyyy-MM-dd") : string.Empty;
+
+    // ── Render a single field ─────────────────────────────────────────────────
+    private RenderFragment RenderField(PropertyFieldDefinition field) => __builder =>
+    {
+        switch (field.FieldType)
+        {
+            case PropertyFieldType.Text:
+                __builder.OpenElement(0, "input");
+                __builder.AddAttribute(1, "class", "fc-prop-input");
+                __builder.AddAttribute(2, "type", "text");
+                __builder.AddAttribute(3, "value", GetEditValue(field.Key));
+                __builder.AddAttribute(4, "placeholder", field.Label);
+                __builder.AddAttribute(5, "oninput", EventCallback.Factory.Create<ChangeEventArgs>(
+                    this, e => SetEditValue(field.Key, e.Value?.ToString())));
+                __builder.CloseElement();
+                break;
+
+            case PropertyFieldType.Numeric:
+                __builder.OpenElement(0, "input");
+                __builder.AddAttribute(1, "class", "fc-prop-input");
+                __builder.AddAttribute(2, "type", "number");
+                __builder.AddAttribute(3, "value", GetEditValue(field.Key));
+                __builder.AddAttribute(4, "step", "0.01");
+                __builder.AddAttribute(5, "oninput", EventCallback.Factory.Create<ChangeEventArgs>(
+                    this, e => SetEditValue(field.Key, e.Value?.ToString())));
+                __builder.CloseElement();
+                break;
+
+            case PropertyFieldType.Date:
+                __builder.OpenElement(0, "input");
+                __builder.AddAttribute(1, "class", "fc-prop-input");
+                __builder.AddAttribute(2, "type", "date");
+                __builder.AddAttribute(3, "value", FormatDate(GetEditValue(field.Key)));
+                __builder.AddAttribute(4, "oninput", EventCallback.Factory.Create<ChangeEventArgs>(
+                    this, e => SetEditValue(field.Key, e.Value?.ToString())));
+                __builder.CloseElement();
+                break;
+
+            case PropertyFieldType.ListOfValues:
+                var options = field.GetListOptions();
+                var currentVal = GetEditValue(field.Key) ?? options.FirstOrDefault() ?? string.Empty;
+                __builder.OpenElement(0, "div");
+                __builder.AddAttribute(1, "class", "fc-lov-wrapper");
+                __builder.OpenElement(2, "select");
+                __builder.AddAttribute(3, "class", "fc-prop-select");
+                __builder.AddAttribute(4, "value", currentVal);
+                __builder.AddAttribute(5, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(
+                    this, e => SetEditValue(field.Key, e.Value?.ToString())));
+                foreach (var opt in options)
+                {
+                    __builder.OpenElement(6, "option");
+                    __builder.AddAttribute(7, "value", opt.Trim());
+                    if (opt.Trim() == currentVal)
+                        __builder.AddAttribute(8, "selected", true);
+                    // Show color swatch + hex value as option text
+                    __builder.AddContent(9, opt.Trim());
+                    __builder.CloseElement();
+                }
+                __builder.CloseElement(); // select
+                // Color preview swatch — only show when value is a hex color
+                if (currentVal.Trim().StartsWith("#"))
+                {
+                    __builder.OpenElement(10, "div");
+                    __builder.AddAttribute(11, "class", "fc-lov-swatch");
+                    __builder.AddAttribute(12, "style", $"background:{currentVal.Trim()};");
+                    __builder.CloseElement();
+                }
+                __builder.CloseElement(); // wrapper
+                break;
+                __builder.OpenElement(0, "button");
+                __builder.AddAttribute(1, "class", "fc-btn fc-btn-secondary");
+                __builder.AddAttribute(2, "onclick", EventCallback.Factory.Create(
+                    this, () => InvokeButtonAction(field)));
+                __builder.AddContent(3, field.ButtonLabel ?? field.Label);
+                __builder.CloseElement();
+                break;
+        }
+    };
+
+    private async Task Save()
+    {
+        if (Artifact is ConnectionArtifact conn)
+        {
+            var lt       = Enum.TryParse<LineType>(_lineTypeStr,         out var l)  ? l  : LineType.Orthogonal;
+            var start    = Enum.TryParse<ArrowTerminator>(_startTermStr, out var s)  ? s  : ArrowTerminator.None;
+            var end      = Enum.TryParse<ArrowTerminator>(_endTermStr,   out var e)  ? e  : ArrowTerminator.Arrow;
+            var loopSide = Enum.TryParse<LoopSide>(_loopSideStr,         out var ls) ? ls : LoopSide.Left;
+
+            if (lt == LineType.Loop)
+            {
+                start = ArrowTerminator.Circle;
+                end   = ArrowTerminator.FilledArrow;
+            }
+
+            await OnSaveConnection.InvokeAsync((conn, lt, start, end, _connectionLabel, loopSide, _loopLabel, _lineColor));
+        }
+        else if (Artifact != null)
+        {
+            // Validate before saving
+            ValidateVariables();
+            ValidateArguments();
+            ValidateOutputs();
+            if (!string.IsNullOrEmpty(_varError) || !string.IsNullOrEmpty(_argError) || !string.IsNullOrEmpty(_outError)) return;
+
+            _editValues["label"] = _editLabel;
+            var newValues = _editValues
+                .Select(kv => new PropertyValue { Key = kv.Key, Value = kv.Value })
+                .ToList();
+
+            // Save variables and arguments back to StartTerminal
+            if (Artifact is StartTerminalArtifact sta)
+            {
+                sta.Variables  = _editVariables.Where(v => !string.IsNullOrWhiteSpace(v.Name)).ToList();
+                sta.Arguments  = _editArguments.Where(v => !string.IsNullOrWhiteSpace(v.Name)).ToList();
+            }
+
+            // Save outputs back to EndTerminal
+            if (Artifact is EndTerminalArtifact eta)
+                eta.Outputs = _editOutputs.Where(o => !string.IsNullOrWhiteSpace(o.Name)).ToList();
+
+            // Save factors and rows back to DecisionTable
+            if (Artifact is DecisionTableArtifact dta)
+            {
+                dta.Factors = _dtFactors.Select(f => f.Clone()).ToList();
+                dta.Rows    = _dtRows.Select(r => r.Clone()).ToList();
+                dta.ResultVariable = _editValues.TryGetValue("resultVariable", out var rv) ? rv ?? "" : "";
+                dta.NotFoundValue  = _editValues.TryGetValue("notFoundValue",  out var nf) ? nf ?? "" : "";
+                dta.RecalcSize();
+            }
+
+            // Save cases back to Switch
+            if (Artifact is SwitchArtifact swa)
+            {
+                swa.Cases          = _swCases.Select(c => c.Clone()).ToList();
+                swa.SwitchVariable = _switchVariable;
+                swa.RecalcSize();
+            }
+
+            await OnSave.InvokeAsync((Artifact, _editLabel, newValues, _canBeLoopBegin, _canBeLoopEnd));
+        }
+    }
+
+    private async Task Cancel() => await OnCancel.InvokeAsync();
+
+    private async Task InvokeButtonAction(PropertyFieldDefinition field)
+    {
+        if (field.ButtonAction != null && Artifact != null)
+            await field.ButtonAction(Artifact);
+    }
+
+    // ── Variable grid helpers ─────────────────────────────────────────────────
+
+    private void AddVariable()
+    {
+        _editVariables.Add(new FlowVariable
+        {
+            Name         = string.Empty,
+            Type         = VariableType.Text,
+            InitialValue = string.Empty
+        });
+        _varError = string.Empty;
+    }
+
+    private void DeleteVariable(int idx)
+    {
+        if (idx >= 0 && idx < _editVariables.Count)
+            _editVariables.RemoveAt(idx);
+        ValidateVariables();
+    }
+
+    private void SortBy(string col)
+    {
+        if (_sortCol == col)
+            _sortAsc = !_sortAsc;
+        else
+        {
+            _sortCol = col;
+            _sortAsc = true;
+        }
+
+        _editVariables = col switch
+        {
+            "name" => _sortAsc
+                ? _editVariables.OrderBy(v => v.Name).ToList()
+                : _editVariables.OrderByDescending(v => v.Name).ToList(),
+            "type" => _sortAsc
+                ? _editVariables.OrderBy(v => v.Type).ToList()
+                : _editVariables.OrderByDescending(v => v.Type).ToList(),
+            _ => _editVariables
+        };
+    }
+
+    private string SortIcon(string col)
+    {
+        if (_sortCol != col) return "↕";
+        return _sortAsc ? "↑" : "↓";
+    }
+
+    private void DropRow(int targetIdx)
+    {
+        if (_dragRowIdx < 0 || _dragRowIdx == targetIdx) { _dragRowIdx = -1; return; }
+        var item = _editVariables[_dragRowIdx];
+        _editVariables.RemoveAt(_dragRowIdx);
+        _editVariables.Insert(targetIdx, item);
+        _dragRowIdx = -1;
+    }
+
+    private bool IsDuplicateName(FlowVariable v, int idx) =>
+        !string.IsNullOrWhiteSpace(v.Name) &&
+        _editVariables.Where((other, i) => i != idx && other.Name == v.Name).Any();
+
+    private void ValidateVariables()
+    {
+        var names = _editVariables.Where(v => !string.IsNullOrWhiteSpace(v.Name)).Select(v => v.Name).ToList();
+        _varError = names.Count != names.Distinct().Count() ? "Duplicate variable names are not allowed." : string.Empty;
+    }
+
+    // ── Arguments helpers ─────────────────────────────────────────────────────
+
+    private void AddArgument()
+    {
+        _editArguments.Add(new FlowVariable { Name = string.Empty, Type = VariableType.Text, InitialValue = string.Empty });
+        _argError = string.Empty;
+    }
+
+    private void DeleteArgument(int idx)
+    {
+        if (idx >= 0 && idx < _editArguments.Count) _editArguments.RemoveAt(idx);
+        ValidateArguments();
+    }
+
+    private void SortArgsBy(string col)
+    {
+        if (_argSortCol == col) _argSortAsc = !_argSortAsc;
+        else { _argSortCol = col; _argSortAsc = true; }
+        _editArguments = col switch
+        {
+            "name" => _argSortAsc ? _editArguments.OrderBy(v => v.Name).ToList() : _editArguments.OrderByDescending(v => v.Name).ToList(),
+            "type" => _argSortAsc ? _editArguments.OrderBy(v => v.Type).ToList() : _editArguments.OrderByDescending(v => v.Type).ToList(),
+            _ => _editArguments
+        };
+    }
+
+    private string ArgSortIcon(string col)
+    {
+        if (_argSortCol != col) return "↕";
+        return _argSortAsc ? "↑" : "↓";
+    }
+
+    private void DropArgRow(int targetIdx)
+    {
+        if (_argDragRowIdx < 0 || _argDragRowIdx == targetIdx) { _argDragRowIdx = -1; return; }
+        var item = _editArguments[_argDragRowIdx];
+        _editArguments.RemoveAt(_argDragRowIdx);
+        _editArguments.Insert(targetIdx, item);
+        _argDragRowIdx = -1;
+    }
+
+    private bool IsArgDuplicateName(FlowVariable v, int idx) =>
+        !string.IsNullOrWhiteSpace(v.Name) &&
+        _editArguments.Where((other, i) => i != idx && other.Name == v.Name).Any();
+
+    private void ValidateArguments()
+    {
+        var names = _editArguments.Where(v => !string.IsNullOrWhiteSpace(v.Name)).Select(v => v.Name).ToList();
+        _argError = names.Count != names.Distinct().Count() ? "Duplicate argument names are not allowed." : string.Empty;
+    }
+
+    // ── Outputs helpers ───────────────────────────────────────────────────────
+
+    private List<OutputSuggestion> BuildOutputSuggestions()
+    {
+        var suggestions = new List<OutputSuggestion>();
+        if (Chart == null) return suggestions;
+
+        // Collect from ALL StartTerminals — union of unique names
+        var argNames = new HashSet<string>();
+        var varNames = new HashSet<string>();
+
+        foreach (var a in Chart.Artifacts.OfType<StartTerminalArtifact>())
+        {
+            foreach (var arg in a.Arguments.Where(x => !string.IsNullOrWhiteSpace(x.Name)))
+                argNames.Add(arg.Name);
+            foreach (var v in a.Variables.Where(x => !string.IsNullOrWhiteSpace(x.Name)))
+                varNames.Add(v.Name);
+        }
+
+        // Arguments — blue (#2563eb)
+        foreach (var name in argNames.OrderBy(n => n))
+            suggestions.Add(new OutputSuggestion(name, "#2563eb"));
+
+        // Variables — black (#1e293b), skip if already added as argument
+        foreach (var name in varNames.OrderBy(n => n))
+            if (!argNames.Contains(name))
+                suggestions.Add(new OutputSuggestion(name, "#1e293b"));
+
+        return suggestions;
+    }
+
+    private string GetValueColor(string value)
+    {
+        var suggestion = _outputSuggestions.FirstOrDefault(s => s.Value == value);
+        return suggestion?.Color ?? "#1e293b";
+    }
+
+    private void AutoFillName(int idx)
+    {
+        // If Name is empty, auto-fill it from Value (remove spaces)
+        var o = _editOutputs[idx];
+        if (string.IsNullOrWhiteSpace(o.Name) && !string.IsNullOrWhiteSpace(o.Value))
+            o.Name = o.Value.Replace(" ", string.Empty);
+    }
+
+    private void AddOutput()
+    {
+        _editOutputs.Add(new FlowOutput { Name = string.Empty, Value = string.Empty });
+        _outError = string.Empty;
+    }
+
+    private void DeleteOutput(int idx)
+    {
+        if (idx >= 0 && idx < _editOutputs.Count) _editOutputs.RemoveAt(idx);
+        ValidateOutputs();
+    }
+
+    private void SortOutputsBy(string col)
+    {
+        if (_outSortCol == col) _outSortAsc = !_outSortAsc;
+        else { _outSortCol = col; _outSortAsc = true; }
+        _editOutputs = _outSortAsc
+            ? _editOutputs.OrderBy(o => o.Name).ToList()
+            : _editOutputs.OrderByDescending(o => o.Name).ToList();
+    }
+
+    private string OutSortIcon(string col)
+    {
+        if (_outSortCol != col) return "↕";
+        return _outSortAsc ? "↑" : "↓";
+    }
+
+    private void DropOutputRow(int targetIdx)
+    {
+        if (_outDragRowIdx < 0 || _outDragRowIdx == targetIdx) { _outDragRowIdx = -1; return; }
+        var item = _editOutputs[_outDragRowIdx];
+        _editOutputs.RemoveAt(_outDragRowIdx);
+        _editOutputs.Insert(targetIdx, item);
+        _outDragRowIdx = -1;
+    }
+
+    private bool IsOutDuplicateName(FlowOutput o, int idx) =>
+        !string.IsNullOrWhiteSpace(o.Name) &&
+        _editOutputs.Where((other, i) => i != idx && other.Name == o.Name).Any();
+
+    private void ValidateOutputs()
+    {
+        var names = _editOutputs.Where(o => !string.IsNullOrWhiteSpace(o.Name)).Select(o => o.Name).ToList();
+        _outError = names.Count != names.Distinct().Count() ? "Duplicate output names are not allowed." : string.Empty;
+    }
+
+    // ── Decision Table helpers ────────────────────────────────────────────────
+
+    private void DtAddFactor()
+    {
+        // Insert new factor before the last (Result) column
+        if (_dtFactors.Count == 0)
+        {
+            _dtFactors.Add(new DtFactor { Name = "Factor 1" });
+            _dtFactors.Add(new DtFactor { Name = "Result" });
+        }
+        else
+        {
+            var resultFactor = _dtFactors[^1];
+            _dtFactors.RemoveAt(_dtFactors.Count - 1);
+            _dtFactors.Add(new DtFactor { Name = $"Factor {_dtFactors.Count}" });
+            _dtFactors.Add(resultFactor);
+        }
+        // Extend all rows with a wildcard for the new column
+        foreach (var row in _dtRows)
+        {
+            while (row.Values.Count < _dtFactors.Count)
+                row.Values.Insert(row.Values.Count > 0 ? row.Values.Count - 1 : 0, "*");
+        }
+        ValidateDt();
+    }
+
+    private void DtRemoveFactor(int idx)
+    {
+        // Don't remove if we'd have fewer than 2 cols (1 condition + 1 result)
+        if (_dtFactors.Count <= 2) return;
+        // Don't allow removing the result (last) column
+        if (idx == _dtFactors.Count - 1) return;
+        _dtFactors.RemoveAt(idx);
+        foreach (var row in _dtRows)
+            if (row.Values.Count > idx)
+                row.Values.RemoveAt(idx);
+        ValidateDt();
+    }
+
+    private void DtAddRow()
+    {
+        var row = new DtRow();
+        for (int i = 0; i < _dtFactors.Count; i++)
+            row.Values.Add(i == _dtFactors.Count - 1 ? "" : "*");
+        _dtRows.Add(row);
+    }
+
+    private void DtRemoveRow(int idx)
+    {
+        if (idx >= 0 && idx < _dtRows.Count)
+            _dtRows.RemoveAt(idx);
+    }
+
+    private void DtDropRow(int targetIdx)
+    {
+        if (_dtDragRowIdx < 0 || _dtDragRowIdx == targetIdx) { _dtDragRowIdx = -1; return; }
+        var item = _dtRows[_dtDragRowIdx];
+        _dtRows.RemoveAt(_dtDragRowIdx);
+        _dtRows.Insert(targetIdx, item);
+        _dtDragRowIdx = -1;
+    }
+
+    private void ValidateDt()
+    {
+        var names = _dtFactors.Where(f => !string.IsNullOrWhiteSpace(f.Name)).Select(f => f.Name).ToList();
+        _dtError = names.Count != names.Distinct().Count() ? "Duplicate factor names are not allowed." : string.Empty;
+    }
+
+    // ── Switch helpers ────────────────────────────────────────────────────────
+
+    private List<string> BuildSwitchVarSuggestions()
+    {
+        if (Chart == null) return new();
+        var names = new List<string>();
+        foreach (var a in Chart.Artifacts.OfType<StartTerminalArtifact>())
+        {
+            names.AddRange(a.Variables.Where(v => !string.IsNullOrWhiteSpace(v.Name)).Select(v => v.Name));
+            names.AddRange(a.Arguments.Where(v => !string.IsNullOrWhiteSpace(v.Name)).Select(v => v.Name));
+        }
+        return names.Distinct().OrderBy(n => n).ToList();
+    }
+
+    private void SwAddCase()
+    {
+        _swCases.Add(new SwitchCase { Value = string.Empty });
+        _swError = string.Empty;
+    }
+
+    private void SwRemoveCase(int idx)
+    {
+        if (idx >= 0 && idx < _swCases.Count)
+            _swCases.RemoveAt(idx);
+        ValidateSw();
+    }
+
+    private void SwDropCase(int targetIdx)
+    {
+        if (_swDragIdx < 0 || _swDragIdx == targetIdx) { _swDragIdx = -1; return; }
+        var item = _swCases[_swDragIdx];
+        _swCases.RemoveAt(_swDragIdx);
+        _swCases.Insert(targetIdx, item);
+        _swDragIdx = -1;
+    }
+
+    private void ValidateSw()
+    {
+        var vals = _swCases.Where(c => !string.IsNullOrWhiteSpace(c.Value)).Select(c => c.Value).ToList();
+        _swError = vals.Count != vals.Distinct().Count() ? "Duplicate case values are not allowed." : string.Empty;
+    }
+}
+
